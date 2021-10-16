@@ -10,7 +10,10 @@ class SyncDegrootModel:
     
     def __init__(self, nodes=100, edge_probability=0.5, P=2, initial_opinions_distribution=np.random.uniform) -> None:
         self._graph = nx.fast_gnp_random_graph(nodes, edge_probability)
-        self._energy = lambda A: lambda x: reduce(lambda s, A_i: np.add(s, np.float_power(np.abs(x - A_i), P)), A, 0) # A is the neighbors' opinions
+        if P == np.inf:
+            self._energy = lambda A: lambda x: reduce(lambda s, A_i: np.max(s, np.abs(x - A_i)), A, 0) # A is the neighbors' opinions
+        else:
+            self._energy = lambda A: lambda x: reduce(lambda s, A_i: np.add(s, np.float_power(np.abs(x - A_i), P)), A, 0) # A is the neighbors' opinions
         self._init_opinions(initial_opinions_distribution)
 
     def _init_opinions(self, distribution: Callable[[], np.double]):

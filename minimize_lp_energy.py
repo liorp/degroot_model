@@ -8,7 +8,7 @@ from SyncDegrootModel import SyncDegrootModel
 ITERATIONS = 10
 
 def main():
-    degroot = SyncDegrootModel(nodes=30, edge_probability=1, P=20, initial_opinions_distribution=lambda: np.random.uniform(5, 50))
+    degroot = SyncDegrootModel(nodes=30, edge_probability=1, P=np.inf, initial_opinions_distribution=lambda: np.random.uniform(5, 50))
     energies = []
     energy = degroot.get_graph_energy()
     energies.append(energy)
