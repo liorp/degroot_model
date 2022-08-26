@@ -8,7 +8,7 @@ from SyncDegrootModel import SyncDegrootModel
 ITERATIONS = 20
 
 def main():
-    degroot = SyncDegrootModel(nodes=3, edge_probability=1, P=np.inf, initial_opinions_distribution=lambda: np.random.uniform(10, 43))
+    degroot = SyncDegrootModel(nodes=40, edge_probability=1, P=np.inf, initial_opinions_distribution=lambda: np.random.uniform(10, 43))
     energies = []
     energy = degroot.get_graph_energy()
     energies.append(energy)
@@ -24,9 +24,9 @@ def main():
     # labels = nx.get_node_attributes(degroot._graph, "energy")
     # nx.draw_networkx(degroot._graph, labels=labels)
 
-    plt.figure("Opinion")
-    labels = nx.get_node_attributes(degroot._graph, "opinion")
-    nx.draw_networkx(degroot._graph, labels=labels)
+    # plt.figure("Opinion")
+    # labels = nx.get_node_attributes(degroot._graph, "opinion")
+    # nx.draw_networkx(degroot._graph, labels=labels)
 
     plt.figure("Total Energy (log) vs Time")
     plt.scatter(range(ITERATIONS + 1), np.log2(energies))
