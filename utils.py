@@ -3,10 +3,11 @@ from matplotlib import pyplot as plt
 import numpy as np
 
 
-def draw_energy(iterations: int, energies: List[int]):
+def draw_energy(iterations: int, energies: List[int]) -> plt.Figure:
     it = np.arange(iterations + 1)
     log_energies = np.log2(energies)
-    plt.figure("Total Energy (log) vs Time")
+    f = plt.figure("Total Energy (log) vs Time")
+    plt.title("Total Energy (log) vs Time")
     plt.scatter(it, log_energies)
     a, b, c = np.polyfit(it, log_energies, 2)
     plt.plot(
@@ -18,4 +19,4 @@ def draw_energy(iterations: int, energies: List[int]):
     plt.legend(fontsize=9)
     plt.xlabel("Time")
     plt.ylabel("Energy")
-    plt.show()
+    return f

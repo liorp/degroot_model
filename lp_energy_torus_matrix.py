@@ -13,28 +13,36 @@ from logger import logger
 from utils import draw_energy
 
 
-ITERATIONS = 50
-P = 10
-N = 7
+ITERATIONS = 40
+P = 9
+N = 4
 PROCESSES = 1
-STUBBORN_AGENTS = {(2, 5): 0.7, (1, 1): 0}
+STUBBORN_AGENTS = {(1, 2): 10, (1, 1): 1, (2, 3): 4}
+
+
+def energy_function_flat(x: np.array, p: int = P) -> int:
+    # Calculate energy of flattened matrix
+    mat = x.reshape(N, N)
+    return get_matrix_energy(mat, p)
 
 
 def _get_neighbours(
     mat: np.ndarray, idx: Tuple[int, int]
 ) -> Tuple[int, int, int, int, int, int, int, int]:
+    # Get opinions of neighbours of idx
     columns = mat.shape[1]
     rows = mat.shape[0]
-    neighbours = [
-        mat[idx[0], (idx[1] + 1) % columns],  # right
-        mat[(idx[0] + 1) % rows, (idx[1] + 1) % columns],  # up right
-        mat[(idx[0] + 1) % rows, idx[1]],  # up
-        mat[(idx[0] + 1) % rows, (idx[1] - 1) % columns],  # up left
-        mat[idx[0], (idx[1] - 1) % columns],  # left
-        mat[(idx[0] - 1) % rows, (idx[1] - 1) % columns],  # down left
-        mat[(idx[0] - 1) % rows, idx[1]],  # down
-        mat[(idx[0] - 1) % rows, (idx[1] + 1) % columns],  # down right
-    ]
+    right = (idx[0], (idx[1] + 1) % columns)
+    left = (idx[0], (idx[1] - 1) % columns)
+    up = ((idx[0] + 1) % rows, idx[1])
+    down = ((idx[0] - 1) % rows, idx[1])
+    up_right = ((idx[0] + 1) % rows, (idx[1] + 1) % columns)
+    up_left = ((idx[0] + 1) % rows, (idx[1] - 1) % columns)
+    down_right = ((idx[0] - 1) % rows, (idx[1] + 1) % columns)
+    down_left = ((idx[0] - 1) % rows, (idx[1] - 1) % columns)
+    directions = [right, left, up, down, up_right, up_left, down_right, down_left]
+
+    neighbours = [STUBBORN_AGENTS.get(d, mat[d]) for d in directions]
     return neighbours
 
 
@@ -55,6 +63,7 @@ def _calculate_next_energy(
 
 
 def degroot_iteration(mat: np.ndarray, p: int = P) -> np.ndarray:
+    # Calculate next energy for each element in matrix
     temp = mat.copy()
     if PROCESSES == 1:
         result = starmap(
@@ -72,7 +81,7 @@ def degroot_iteration(mat: np.ndarray, p: int = P) -> np.ndarray:
     return temp
 
 
-def _get_current_energy(
+def _get_vertex_energy(
     mat: np.ndarray, idx: Tuple[int, int], elem: int, p: int = P
 ) -> int:
     neighbours = _get_neighbours(mat, idx)
@@ -86,13 +95,13 @@ def _get_current_energy(
 def get_matrix_energy(mat: np.ndarray, p: int = P) -> int:
     if PROCESSES == 1:
         result = starmap(
-            _get_current_energy,
+            _get_vertex_energy,
             [(mat, idx, e, p) for idx, e in np.ndenumerate(mat)],
         )
     else:
         with mp.Pool(processes=PROCESSES) as pool:
             result = pool.starmap(
-                _get_current_energy,
+                _get_vertex_energy,
                 [(mat, idx, e, p) for idx, e in np.ndenumerate(mat)],
             )
     return sum(result)
@@ -100,13 +109,47 @@ def get_matrix_energy(mat: np.ndarray, p: int = P) -> int:
 
 def main():
     matrix = 10 * np.random.rand(N, N)
-    fig, (ax, cbar_ax) = plt.subplots(ncols=2, gridspec_kw={"width_ratios": [10, 1]})
+
+    # Draw minimal energy solution for this graph
+    minimum_graph_energy = optimize.minimize(
+        energy_function_flat,
+        [i for i in range(N * N)],
+        constraints=[
+            optimize.LinearConstraint(
+                [k == i * N + j for k in range(N * N)],
+                STUBBORN_AGENTS[(i, j)],
+                STUBBORN_AGENTS[(i, j)],
+            )
+            for (i, j) in STUBBORN_AGENTS
+        ],
+        method="trust-constr",
+    )
+    logger.info(f"Minimum Graph Energy: {minimum_graph_energy.fun}")
+    plt.figure("Minimum Graph State")
+    plt.title(f"Minimum Graph State (E={minimum_graph_energy.fun})")
+    sns.heatmap(
+        minimum_graph_energy.x.reshape(N, N),
+        cmap="magma",
+        annot=True,
+        vmin=0,
+        vmax=10,
+    )
+
+    fig, (ax, cbar_ax) = plt.subplots(
+        ncols=2, gridspec_kw={"width_ratios": [10, 1]}, num="Process"
+    )
     camera = Camera(fig)
     ax.text(
-        0.5, 1.01, f"t=1 n={N} p={P} stubborn={STUBBORN_AGENTS}", transform=ax.transAxes
+        0.5, 1.01, f"t=0 n={N} p={P} stubborn={STUBBORN_AGENTS}", transform=ax.transAxes
     )
     sns.heatmap(
-        matrix, cmap="magma", annot=False, vmin=0, vmax=10, ax=ax, cbar_ax=cbar_ax
+        matrix,
+        cmap="magma",
+        annot=False,
+        vmin=0,
+        vmax=10,
+        ax=ax,
+        cbar_ax=cbar_ax,
     )
     camera.snap()
 
@@ -115,46 +158,46 @@ def main():
     energies.append(energy)
     logger.info(f"Initial Energy: f{energy}")
 
-    n = degroot_iteration(matrix)
-    ax.text(
-        0.5, 1.01, f"t=2 n={N} p={P} stubborn={STUBBORN_AGENTS}", transform=ax.transAxes
-    )
-    plt.draw()
-    sns.heatmap(n, cmap="magma", annot=False, vmin=0, vmax=10, ax=ax, cbar_ax=cbar_ax)
-    camera.snap()
-
     for i in range(ITERATIONS):
-        n = degroot_iteration(n)
+        matrix = degroot_iteration(matrix)
         ax.text(
             0.5,
             1.01,
-            f"t={3+i} n={N} p={P} stubborn={STUBBORN_AGENTS}",
+            f"t={i+1} n={N} p={P} stubborn={STUBBORN_AGENTS}",
             transform=ax.transAxes,
         )
-        plt.draw()
+        # plt.draw()
         sns.heatmap(
-            n, cmap="magma", annot=False, vmin=0, vmax=10, ax=ax, cbar_ax=cbar_ax
+            matrix,
+            cmap="magma",
+            annot=False,
+            vmin=0,
+            vmax=10,
+            ax=ax,
+            cbar_ax=cbar_ax,
         )
         camera.snap()
 
-        energy = get_matrix_energy(n)
+        energy = get_matrix_energy(matrix)
         energies.append(energy)
         logger.debug(f"{i+1} Energy: f{energy}")
 
-    ax.text(
-        0.5,
-        1.01,
-        f"t={4+i} n={N} p={P} stubborn={STUBBORN_AGENTS}",
-        transform=ax.transAxes,
-    )
-    plt.draw()
-    sns.heatmap(n, cmap="magma", annot=False, vmin=0, vmax=10, ax=ax, cbar_ax=cbar_ax)
-    camera.snap()
     # animation = camera.animate()
     # animation.save(f"animation_N{N}_P{P}_I{ITERATIONS}_STUBBORN{len(STUBBORN_AGENTS)}.mp4")
-    plt.show()
+    # plt.show()
 
-    draw_energy(ITERATIONS, energies)
+    plt.figure("Final State")
+    plt.title(f"Final State (E={energy})")
+    sns.heatmap(
+        matrix,
+        cmap="magma",
+        annot=True,
+        vmin=0,
+        vmax=10,
+    )
+
+    f = draw_energy(ITERATIONS, energies)
+    plt.show()
 
 
 if __name__ == "__main__":
