@@ -13,11 +13,16 @@ from logger import logger
 from utils import draw_energy
 
 
-ITERATIONS = 40
-P = 9
-N = 4
+P = 15
+N = 100
+ITERATIONS = np.floor(N / 2).astype(int)
 PROCESSES = 1
-STUBBORN_AGENTS = {(1, 2): 10, (1, 1): 1, (2, 3): 4}
+STUBBORN_AGENTS = {
+    (np.floor(N) - 1, np.floor(N)): 0,
+    (np.floor(N / 2), np.floor(N / 2)): 10,
+}
+STEPS_SNAPSHOT = 3
+CHECK_MINIMAL_ENERGY = False
 
 
 def energy_function_flat(x: np.array, p: int = P) -> int:
@@ -53,7 +58,7 @@ def _calculate_next_energy(
         return idx, STUBBORN_AGENTS[idx]
     neighbours = _get_neighbours(mat, idx)
     energy_function = lambda x: np.sum(
-        [np.float_power(np.abs(x - A_i), p) for A_i in neighbours]
+        np.float_power(np.abs(np.subtract(x, neighbours)), p)
     )
     result = optimize.minimize_scalar(energy_function)
     x_min = result.x
@@ -86,7 +91,7 @@ def _get_vertex_energy(
 ) -> int:
     neighbours = _get_neighbours(mat, idx)
     energy_function = lambda x: np.sum(
-        [np.float_power(np.abs(x - A_i), p) for A_i in neighbours]
+        np.float_power(np.abs(np.subtract(x, neighbours)), p)
     )
     result = energy_function(elem)
     return result
@@ -108,32 +113,36 @@ def get_matrix_energy(mat: np.ndarray, p: int = P) -> int:
 
 
 def main():
-    matrix = 10 * np.random.rand(N, N)
+    logger.info("Starting simulation")
 
-    # Draw minimal energy solution for this graph
-    minimum_graph_energy = optimize.minimize(
-        energy_function_flat,
-        [i for i in range(N * N)],
-        constraints=[
-            optimize.LinearConstraint(
-                [k == i * N + j for k in range(N * N)],
-                STUBBORN_AGENTS[(i, j)],
-                STUBBORN_AGENTS[(i, j)],
-            )
-            for (i, j) in STUBBORN_AGENTS
-        ],
-        method="trust-constr",
-    )
-    logger.info(f"Minimum Graph Energy: {minimum_graph_energy.fun}")
-    plt.figure("Minimum Graph State")
-    plt.title(f"Minimum Graph State (E={minimum_graph_energy.fun})")
-    sns.heatmap(
-        minimum_graph_energy.x.reshape(N, N),
-        cmap="magma",
-        annot=True,
-        vmin=0,
-        vmax=10,
-    )
+    matrix = 10 * np.random.rand(N, N)
+    logger.info("Generated matrix")
+
+    if CHECK_MINIMAL_ENERGY:
+        # Draw minimal energy solution for this graph
+        minimum_graph_energy = optimize.minimize(
+            energy_function_flat,
+            [10 * np.random.rand() for i in range(N * N)],
+            constraints=[
+                optimize.LinearConstraint(
+                    [k == i * N + j for k in range(N * N)],
+                    STUBBORN_AGENTS[(i, j)],
+                    STUBBORN_AGENTS[(i, j)],
+                )
+                for (i, j) in STUBBORN_AGENTS
+            ],
+            method="trust-constr",
+        )
+        logger.info(f"Minimum Graph Energy: {minimum_graph_energy.fun}")
+        plt.figure("Minimum Graph State")
+        plt.title(f"Minimum Graph State (E={minimum_graph_energy.fun})")
+        sns.heatmap(
+            minimum_graph_energy.x.reshape(N, N),
+            cmap="magma",
+            annot=True,
+            vmin=0,
+            vmax=10,
+        )
 
     fig, (ax, cbar_ax) = plt.subplots(
         ncols=2, gridspec_kw={"width_ratios": [10, 1]}, num="Process"
@@ -160,44 +169,48 @@ def main():
 
     for i in range(ITERATIONS):
         matrix = degroot_iteration(matrix)
-        ax.text(
-            0.5,
-            1.01,
-            f"t={i+1} n={N} p={P} stubborn={STUBBORN_AGENTS}",
-            transform=ax.transAxes,
-        )
-        # plt.draw()
-        sns.heatmap(
-            matrix,
-            cmap="magma",
-            annot=False,
-            vmin=0,
-            vmax=10,
-            ax=ax,
-            cbar_ax=cbar_ax,
-        )
-        camera.snap()
+        if i % STEPS_SNAPSHOT == 0:
+            ax.text(
+                0.5,
+                1.01,
+                f"t={i+1} n={N} p={P} stubborn={STUBBORN_AGENTS}",
+                transform=ax.transAxes,
+            )
+            plt.draw()
+            sns.heatmap(
+                matrix,
+                cmap="magma",
+                annot=False,
+                vmin=0,
+                vmax=10,
+                ax=ax,
+                cbar_ax=cbar_ax,
+            )
+            camera.snap()
 
         energy = get_matrix_energy(matrix)
         energies.append(energy)
         logger.debug(f"{i+1} Energy: f{energy}")
 
-    # animation = camera.animate()
-    # animation.save(f"animation_N{N}_P{P}_I{ITERATIONS}_STUBBORN{len(STUBBORN_AGENTS)}.mp4")
-    # plt.show()
-
-    plt.figure("Final State")
-    plt.title(f"Final State (E={energy})")
-    sns.heatmap(
-        matrix,
-        cmap="magma",
-        annot=True,
-        vmin=0,
-        vmax=10,
+    animation = camera.animate()
+    animation.save(
+        f"pdegroot_torus_N{N}_P{P}_I{ITERATIONS}_STUBBORN{len(STUBBORN_AGENTS)}.mp4"
     )
-
-    f = draw_energy(ITERATIONS, energies)
     plt.show()
+
+    if CHECK_MINIMAL_ENERGY:
+        plt.figure("Final State")
+        plt.title(f"Final State (E={energy})")
+        sns.heatmap(
+            matrix,
+            cmap="magma",
+            annot=True,
+            vmin=0,
+            vmax=10,
+        )
+
+        f = draw_energy(ITERATIONS, energies)
+        plt.show()
 
 
 if __name__ == "__main__":
