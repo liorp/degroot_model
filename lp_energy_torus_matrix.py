@@ -18,7 +18,7 @@ N = 100
 ITERATIONS = np.floor(N / 2).astype(int)
 PROCESSES = 1
 STUBBORN_AGENTS = {
-    (np.floor(N) - 1, np.floor(N)): 0,
+    (np.floor(N) - 1, np.floor(N) - 1): 0,
     (np.floor(N / 2), np.floor(N / 2)): 10,
 }
 STEPS_SNAPSHOT = 3
