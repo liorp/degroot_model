@@ -57,9 +57,14 @@ def _calculate_next_energy(
     if idx in STUBBORN_AGENTS:
         return idx, STUBBORN_AGENTS[idx]
     neighbours = _get_neighbours(mat, idx)
-    energy_function = lambda x: np.sum(
-        np.float_power(np.abs(np.subtract(x, neighbours)), p)
-    )
+    
+    if P == np.inf:
+        energy_function = lambda x: np.max(np.abs(np.subtract(x, neighbours)))
+    else:
+        energy_function = lambda x: np.sum(
+            np.float_power(np.abs(np.subtract(x, neighbours)), p)
+        )
+
     result = optimize.minimize_scalar(energy_function)
     x_min = result.x
     return idx, x_min
@@ -90,9 +95,14 @@ def _get_vertex_energy(
     mat: np.ndarray, idx: Tuple[int, int], elem: int, p: int = P
 ) -> int:
     neighbours = _get_neighbours(mat, idx)
-    energy_function = lambda x: np.sum(
-        np.float_power(np.abs(np.subtract(x, neighbours)), p)
-    )
+    
+    if P == np.inf:
+        energy_function = lambda x: np.max(np.abs(np.subtract(x, neighbours)))
+    else:
+        energy_function = lambda x: np.sum(
+            np.float_power(np.abs(np.subtract(x, neighbours)), p)
+        )
+
     result = energy_function(elem)
     return result
 
