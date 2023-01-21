@@ -1,11 +1,8 @@
 from typing import Tuple
 import numpy as np
 from scipy import optimize
-from functools import reduce
 from itertools import starmap
 from matplotlib import pyplot as plt
-import networkx as nx
-from SyncDegrootModel import SyncDegrootModel
 import seaborn as sns
 from celluloid import Camera
 import multiprocessing as mp
@@ -14,14 +11,14 @@ from utils import draw_energy
 
 
 P = 15
-N = 100
+N = 50
 ITERATIONS = np.floor(N / 2).astype(int)
 PROCESSES = 1
 STUBBORN_AGENTS = {
-    (np.floor(N) - 1, np.floor(N) - 1): 0,
+    (np.floor(N) - 3, np.floor(N) - 3): 0,
     (np.floor(N / 2), np.floor(N / 2)): 10,
 }
-STEPS_SNAPSHOT = 3
+STEPS_SNAPSHOT = 2
 CHECK_MINIMAL_ENERGY = False
 
 

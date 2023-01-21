@@ -1,0 +1,9 @@
+celluloid==0.2.0
+matplotlib==3.6.3
+networkx==3.0
+numpy==1.24.1
+pandas==1.5.3
+Pillow==9.4.0
+scipy==1.10.0
+seaborn==0.12.2
+six==1.16.0
