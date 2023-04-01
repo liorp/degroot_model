@@ -155,9 +155,15 @@ def main():
         ncols=2, gridspec_kw={"width_ratios": [10, 1]}, num="Process"
     )
     camera = Camera(fig)
-    ax.text(
-        0.5, 1.01, f"t=0 n={N} p={P} stubborn={STUBBORN_AGENTS}", transform=ax.transAxes
-    )
+    if len(STUBBORN_AGENTS) > 0:
+        ax.text(
+            0.5, 1.01, f"t=0 n={N} p={P} stubborn={STUBBORN_AGENTS}", transform=ax.transAxes
+        )
+    else:
+        ax.text(
+            0.5, 1.01, f"t=0 n={N} p={P}", transform=ax.transAxes
+        )
+
     sns.heatmap(
         matrix,
         cmap="magma",
@@ -177,12 +183,20 @@ def main():
     for i in range(ITERATIONS):
         matrix = degroot_iteration(matrix)
         if i % STEPS_SNAPSHOT == 0:
-            ax.text(
-                0.5,
-                1.01,
-                f"t={i+1} n={N} p={P} stubborn={STUBBORN_AGENTS}",
-                transform=ax.transAxes,
-            )
+            if len(STUBBORN_AGENTS) > 0:
+                ax.text(
+                    0.5, 
+                    1.01,
+                    f"t={i+1} n={N} p={P} stubborn={STUBBORN_AGENTS}", 
+                    transform=ax.transAxes
+                )
+            else:
+                ax.text(
+                    0.5, 
+                    1.01,
+                    f"t={i+1} n={N} p={P}", 
+                    transform=ax.transAxes
+                )
             plt.draw()
             sns.heatmap(
                 matrix,
