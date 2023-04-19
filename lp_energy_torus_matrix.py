@@ -8,18 +8,21 @@ from celluloid import Camera
 import multiprocessing as mp
 from logger import logger
 from utils import draw_energy
+from mpl_toolkits.axes_grid1.axes_divider import make_axes_locatable
 
 
-P = 15
+P = [1.5, 2, 5, 10, np.inf]
 N = 50
-ITERATIONS = np.floor(N / 2).astype(int)
+ITERATIONS = 100
 PROCESSES = 1
 STUBBORN_AGENTS = {
-    (np.floor(N) - 3, np.floor(N) - 3): 0,
-    (np.floor(N / 2), np.floor(N / 2)): 10,
+    (np.floor(N) - 10, np.floor(N) - 10): 0,
+    (np.floor(N / 2 - 4), np.floor(N / 2 - 4)): 10,
 }
 STEPS_SNAPSHOT = 2
 CHECK_MINIMAL_ENERGY = False
+ANIMATION = False
+TIMES_FOR_PLOT = [1, 5, 10, 50, 100]
 
 
 def energy_function_flat(x: np.array, p: int = P) -> int:
@@ -30,7 +33,7 @@ def energy_function_flat(x: np.array, p: int = P) -> int:
 
 def _get_neighbours(
     mat: np.ndarray, idx: Tuple[int, int]
-) -> Tuple[int, int, int, int, int, int, int, int]:
+) -> list[int, int, int, int, int, int, int, int]:
     # Get opinions of neighbours of idx
     columns = mat.shape[1]
     rows = mat.shape[0]
@@ -54,8 +57,8 @@ def _calculate_next_energy(
     if idx in STUBBORN_AGENTS:
         return idx, STUBBORN_AGENTS[idx]
     neighbours = _get_neighbours(mat, idx)
-    
-    if P == np.inf:
+
+    if p == np.inf:
         energy_function = lambda x: np.max(np.abs(np.subtract(x, neighbours)))
     else:
         energy_function = lambda x: np.sum(
@@ -92,8 +95,8 @@ def _get_vertex_energy(
     mat: np.ndarray, idx: Tuple[int, int], elem: int, p: int = P
 ) -> int:
     neighbours = _get_neighbours(mat, idx)
-    
-    if P == np.inf:
+
+    if p == np.inf:
         energy_function = lambda x: np.max(np.abs(np.subtract(x, neighbours)))
     else:
         energy_function = lambda x: np.sum(
@@ -116,90 +119,78 @@ def get_matrix_energy(mat: np.ndarray, p: int = P) -> int:
                 _get_vertex_energy,
                 [(mat, idx, e, p) for idx, e in np.ndenumerate(mat)],
             )
-    return sum(result)
-
-
-def main():
-    logger.info("Starting simulation")
-
-    matrix = 10 * np.random.rand(N, N)
-    logger.info("Generated matrix")
-
-    if CHECK_MINIMAL_ENERGY:
-        # Draw minimal energy solution for this graph
-        minimum_graph_energy = optimize.minimize(
-            energy_function_flat,
-            [10 * np.random.rand() for i in range(N * N)],
-            constraints=[
-                optimize.LinearConstraint(
-                    [k == i * N + j for k in range(N * N)],
-                    STUBBORN_AGENTS[(i, j)],
-                    STUBBORN_AGENTS[(i, j)],
-                )
-                for (i, j) in STUBBORN_AGENTS
-            ],
-            method="trust-constr",
-        )
-        logger.info(f"Minimum Graph Energy: {minimum_graph_energy.fun}")
-        plt.figure("Minimum Graph State")
-        plt.title(f"Minimum Graph State (E={minimum_graph_energy.fun})")
-        sns.heatmap(
-            minimum_graph_energy.x.reshape(N, N),
-            cmap="magma",
-            annot=True,
-            vmin=0,
-            vmax=10,
-        )
-
-    fig, (ax, cbar_ax) = plt.subplots(
-        ncols=2, gridspec_kw={"width_ratios": [10, 1]}, num="Process"
-    )
-    camera = Camera(fig)
-    if len(STUBBORN_AGENTS) > 0:
-        ax.text(
-            0.5, 1.01, f"t=0 n={N} p={P} stubborn={STUBBORN_AGENTS}", transform=ax.transAxes
-        )
+    if p == np.inf:
+        return max(result)
     else:
-        ax.text(
-            0.5, 1.01, f"t=0 n={N} p={P}", transform=ax.transAxes
-        )
+        return sum(result)
 
-    sns.heatmap(
+
+def degroot_simulation(matrix: np.ndarray, p: int = P):
+    logger.info(f"Starting simulation for p={p}")
+    fig, axes = plt.subplots(nrows=1, ncols=len(TIMES_FOR_PLOT) + 1, figsize=(25, 3))
+    for ax in axes:
+        ax.set_axis_off()
+    fig.suptitle(
+        f"Simulating p-DeGroot for n={N} p={p} stubborn={STUBBORN_AGENTS} in times {TIMES_FOR_PLOT}"
+    )
+    im1 = sns.heatmap(
         matrix,
         cmap="magma",
         annot=False,
         vmin=0,
         vmax=10,
-        ax=ax,
-        cbar_ax=cbar_ax,
+        ax=axes[0],
+        cbar=False,
     )
-    camera.snap()
+    divider1 = make_axes_locatable(axes[0])
+    cax1 = divider1.append_axes("left", size="10%", pad=0.3)
+    cax1.yaxis.tick_left()
+    cax1.yaxis.set_ticks_position("left")
+    cax1.yaxis.set_label_position("left")
+    plt.colorbar(im1.get_children()[0], cax=cax1)
+
+    if ANIMATION:
+        # GIF animation
+        fig, (ax, cbar_ax) = plt.subplots(
+            ncols=2, gridspec_kw={"width_ratios": [10, 1]}, num="Process"
+        )
+        camera = Camera(fig)
+        ax.text(
+            0,
+            1.01,
+            f"t=0 n={N} p={P} stubborn={STUBBORN_AGENTS}",
+            transform=ax.transAxes,
+        )
+        sns.heatmap(
+            matrix,
+            cmap="magma",
+            annot=False,
+            vmin=0,
+            vmax=10,
+            ax=ax,
+            cbar_ax=cbar_ax,
+        )
+        camera.snap()
 
     energies = []
-    energy = get_matrix_energy(matrix)
+    energy = get_matrix_energy(matrix, p)
     energies.append(energy)
     logger.info(f"Initial Energy: f{energy}")
 
+    temp_matrix = matrix.copy()
     for i in range(ITERATIONS):
-        matrix = degroot_iteration(matrix)
-        if i % STEPS_SNAPSHOT == 0:
-            if len(STUBBORN_AGENTS) > 0:
-                ax.text(
-                    0.5, 
-                    1.01,
-                    f"t={i+1} n={N} p={P} stubborn={STUBBORN_AGENTS}", 
-                    transform=ax.transAxes
-                )
-            else:
-                ax.text(
-                    0.5, 
-                    1.01,
-                    f"t={i+1} n={N} p={P}", 
-                    transform=ax.transAxes
-                )
+        temp_matrix = degroot_iteration(temp_matrix, p)
+        if i % STEPS_SNAPSHOT == 0 and ANIMATION:
+            # GIF animation
+            ax.text(
+                0,
+                1.01,
+                f"t={i+1} n={N} p={P} stubborn={STUBBORN_AGENTS}",
+                transform=ax.transAxes,
+            )
             plt.draw()
             sns.heatmap(
-                matrix,
+                temp_matrix,
                 cmap="magma",
                 annot=False,
                 vmin=0,
@@ -208,14 +199,36 @@ def main():
                 cbar_ax=cbar_ax,
             )
             camera.snap()
+        if i + 1 in TIMES_FOR_PLOT:
+            sns.heatmap(
+                temp_matrix,
+                cmap="magma",
+                annot=False,
+                vmin=0,
+                vmax=10,
+                ax=axes[TIMES_FOR_PLOT.index(i + 1) + 1],
+                cbar=False,
+            )
 
-        energy = get_matrix_energy(matrix)
+        energy = get_matrix_energy(temp_matrix, p)
         energies.append(energy)
         logger.debug(f"{i+1} Energy: f{energy}")
 
-    animation = camera.animate()
-    animation.save(
-        f"pdegroot_torus_N{N}_P{P}_I{ITERATIONS}_STUBBORN{len(STUBBORN_AGENTS)}.mp4"
+    if ANIMATION:
+        animation = camera.animate()
+        animation.save(
+            f"animations/pdegroot_torus_N{N}_p{p}_I{ITERATIONS}_STUBBORN{len(STUBBORN_AGENTS)}".replace(
+                ".", "_"
+            )
+            + ".mp4"
+        )
+    plt.savefig(
+        f"images/pdegroot_torus_N{N}_p{p}_I{ITERATIONS}_STUBBORN{len(STUBBORN_AGENTS)}".replace(
+            ".", "_"
+        )
+        + ".png",
+        bbox_inches="tight",
+        pad_inches=0,
     )
     plt.show()
 
@@ -230,8 +243,56 @@ def main():
             vmax=10,
         )
 
-        f = draw_energy(ITERATIONS, energies)
-        plt.show()
+    f = draw_energy(ITERATIONS, energies)
+    plt.savefig(
+        f"images/energy_pdegroot_torus_N{N}_p{p}_I{ITERATIONS}_STUBBORN{len(STUBBORN_AGENTS)}".replace(
+            ".", "_"
+        )
+        + ".png",
+        bbox_inches="tight",
+        pad_inches=0,
+    )
+    plt.show()
+
+
+def check_minimal_energy():
+    # Draw minimal energy solution for this graph
+    minimum_graph_energy = optimize.minimize(
+        energy_function_flat,
+        [10 * np.random.rand() for i in range(N * N)],
+        constraints=[
+            optimize.LinearConstraint(
+                [k == i * N + j for k in range(N * N)],
+                STUBBORN_AGENTS[(i, j)],
+                STUBBORN_AGENTS[(i, j)],
+            )
+            for (i, j) in STUBBORN_AGENTS
+        ],
+        method="trust-constr",
+    )
+    logger.info(f"Minimum Graph Energy: {minimum_graph_energy.fun}")
+    plt.figure("Minimum Graph State")
+    plt.title(f"Minimum Graph State (E={minimum_graph_energy.fun})")
+    sns.heatmap(
+        minimum_graph_energy.x.reshape(N, N),
+        cmap="magma",
+        annot=True,
+        vmin=0,
+        vmax=10,
+    )
+
+
+def main():
+    logger.info("Starting simulation")
+
+    matrix = 10 * np.random.rand(N, N)
+    logger.info("Generated matrix")
+
+    if CHECK_MINIMAL_ENERGY:
+        check_minimal_energy()
+
+    for p in P:
+        degroot_simulation(matrix, p)
 
 
 if __name__ == "__main__":
