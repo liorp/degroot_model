@@ -221,7 +221,7 @@ def degroot_simulation(
     for ax in axes:
         ax.set_axis_off()
     fig.suptitle(
-        f"Simulating p-DeGroot for n={N} p={p} stubborn={stubborn_agents} in times {TIMES_FOR_PLOT}"
+        f"Simulating p-DeGroot for n={N} p={p} stubborn={stubborn_agents} small world {len(small_world_neighbours) > 0} in times {TIMES_FOR_PLOT}"
     )
     im1 = sns.heatmap(
         matrix,
