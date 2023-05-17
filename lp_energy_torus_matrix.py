@@ -1,15 +1,19 @@
-from typing import Tuple
+import itertools
+import random
+import multiprocessing as mp
+from typing import List, Tuple
+
 import numpy as np
 from scipy import optimize
 from itertools import starmap
 from matplotlib import pyplot as plt
 import seaborn as sns
 from celluloid import Camera
-import multiprocessing as mp
 from logger import logger
 from utils import draw_energy
 from mpl_toolkits.axes_grid1.axes_divider import make_axes_locatable
 
+# Parameters
 
 P = [1.5, 2, 5, 10, np.inf]
 N = 50
@@ -23,6 +27,37 @@ STEPS_SNAPSHOT = 2
 CHECK_MINIMAL_ENERGY = False
 ANIMATION = False
 TIMES_FOR_PLOT = [1, 5, 10, 50, 100]
+
+
+def _generate_small_world_neighbours(
+    N: int = N, k: int = 10
+) -> list[tuple[tuple[int, int], tuple[int, int]]]:
+    # Get neighbours for small world network - we only allow one out of every k nodes to have a single random friend
+    values = list(range(0, N - 1))
+
+    # Generate and shuffle all possible combinations of length 2
+    shuffled_combinations = zip(
+        random.sample(list(itertools.combinations(values, 2)), N // k),
+        random.sample(list(itertools.combinations(values, 2)), N // k),
+    )
+
+    # Convert shuffled combinations into tuples
+    neighbours = [tuple(comb) for comb in shuffled_combinations]
+
+    # Add opposite tuples to neighbours (undirected graph)
+    opposite_tuples = []
+    for n in neighbours:
+        opposite = (n[1], n[0])
+        opposite_tuples.append(n)
+        opposite_tuples.append(opposite)
+
+    neighbours.extend(opposite_tuples)
+    return neighbours
+
+
+SMALL_WORLD_NEIGHBOURS = _generate_small_world_neighbours()
+
+# Functions
 
 
 def energy_function_flat(x: np.array, p: int = P) -> int:
@@ -46,6 +81,12 @@ def _get_neighbours(
     down_right = ((idx[0] - 1) % rows, (idx[1] + 1) % columns)
     down_left = ((idx[0] - 1) % rows, (idx[1] - 1) % columns)
     directions = [right, left, up, down, up_right, up_left, down_right, down_left]
+
+    if SMALL_WORLD_NEIGHBOURS:
+        small_world_neighbours = [n for n in SMALL_WORLD_NEIGHBOURS if idx in n]
+        small_world_neighbours = map(lambda x: x.remove(idx), small_world_neighbours)
+        print("Neighbours", small_world_neighbours)
+        directions.extend(list(small_world_neighbours))
 
     neighbours = [STUBBORN_AGENTS.get(d, mat[d]) for d in directions]
     return neighbours
@@ -107,7 +148,7 @@ def _get_vertex_energy(
     return result
 
 
-def get_matrix_energy(mat: np.ndarray, p: int = P) -> int:
+def get_matrix_energy(mat: np.ndarray, p: int) -> int:
     if PROCESSES == 1:
         result = starmap(
             _get_vertex_energy,
@@ -123,6 +164,22 @@ def get_matrix_energy(mat: np.ndarray, p: int = P) -> int:
         return max(result)
     else:
         return sum(result)
+
+
+def get_matrix_energies(
+    mat: np.ndarray, p: int, energies: dict[str, int]
+) -> List[int, int, int]:
+    # Returns p energy, 2 energy, inf energy
+    # It also appends the energies to the energies dict for convenience
+    results = [
+        get_matrix_energy(mat, p),
+        get_matrix_energy(mat, 2),
+        get_matrix_energy(mat, np.inf),
+    ]
+    energies["p"].append(results[0])
+    energies["2"].append(results[1])
+    energies["inf"].append(results[2])
+    return results
 
 
 def degroot_simulation(matrix: np.ndarray, p: int = P):
@@ -172,10 +229,11 @@ def degroot_simulation(matrix: np.ndarray, p: int = P):
         )
         camera.snap()
 
-    energies = []
-    energy = get_matrix_energy(matrix, p)
-    energies.append(energy)
-    logger.info(f"Initial Energy: f{energy}")
+    energies = {"p": [], "2": [], "inf": []}
+    energy_p, energy_2, energy_inf = get_matrix_energies(matrix, p, energies)
+    logger.info(
+        f"Initial Energies: f{energy_p:.2f}, f{energy_2:.2f}, f{energy_inf:.2f}"
+    )
 
     temp_matrix = matrix.copy()
     for i in range(ITERATIONS):
@@ -210,9 +268,10 @@ def degroot_simulation(matrix: np.ndarray, p: int = P):
                 cbar=False,
             )
 
-        energy = get_matrix_energy(temp_matrix, p)
-        energies.append(energy)
-        logger.debug(f"{i+1} Energy: f{energy}")
+        energy_p, energy_2, energy_inf = get_matrix_energies(matrix, p, energies)
+        logger.debug(
+            f"{i+1} Energies: f{energy_p:.2f}, f{energy_2:.2f}, f{energy_inf:.2f}"
+        )
 
     if ANIMATION:
         animation = camera.animate()
@@ -232,18 +291,9 @@ def degroot_simulation(matrix: np.ndarray, p: int = P):
     )
     plt.show()
 
-    if CHECK_MINIMAL_ENERGY:
-        plt.figure("Final State")
-        plt.title(f"Final State (E={energy})")
-        sns.heatmap(
-            matrix,
-            cmap="magma",
-            annot=True,
-            vmin=0,
-            vmax=10,
-        )
-
-    f = draw_energy(ITERATIONS, energies)
+    f = draw_energy(ITERATIONS, energies["p"], p)
+    f = draw_energy(ITERATIONS, energies["2"], "2")
+    f = draw_energy(ITERATIONS, energies["inf"], "inf")
     plt.savefig(
         f"images/energy_pdegroot_torus_N{N}_p{p}_I{ITERATIONS}_STUBBORN{len(STUBBORN_AGENTS)}".replace(
             ".", "_"
