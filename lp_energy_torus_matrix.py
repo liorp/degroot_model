@@ -41,17 +41,8 @@ def _generate_small_world_neighbours(
         random.sample(list(itertools.combinations(values, 2)), N // k),
     )
 
-    # Convert shuffled combinations into tuples
+    # Convert shuffled combinations into list
     neighbours = [tuple(comb) for comb in shuffled_combinations]
-
-    # Add opposite tuples to neighbours (undirected graph)
-    opposite_tuples = []
-    for n in neighbours:
-        opposite = (n[1], n[0])
-        opposite_tuples.append(n)
-        opposite_tuples.append(opposite)
-
-    neighbours.extend(opposite_tuples)
     return neighbours
 
 
@@ -68,7 +59,7 @@ def energy_function_flat(x: np.array, p: int = P) -> int:
 
 def _get_neighbours(
     mat: np.ndarray, idx: Tuple[int, int]
-) -> list[int, int, int, int, int, int, int, int]:
+) -> tuple[int, int, int, int, int, int, int, int]:
     # Get opinions of neighbours of idx
     columns = mat.shape[1]
     rows = mat.shape[0]
@@ -83,12 +74,12 @@ def _get_neighbours(
     directions = [right, left, up, down, up_right, up_left, down_right, down_left]
 
     if SMALL_WORLD_NEIGHBOURS:
-        small_world_neighbours = [n for n in SMALL_WORLD_NEIGHBOURS if idx in n]
-        small_world_neighbours = map(lambda x: x.remove(idx), small_world_neighbours)
-        print("Neighbours", small_world_neighbours)
-        directions.extend(list(small_world_neighbours))
+        small_world_neighbours = [
+            n[1] if n[0] == idx else n[0] for n in SMALL_WORLD_NEIGHBOURS if idx in n
+        ]
+        directions.extend(small_world_neighbours)
 
-    neighbours = [STUBBORN_AGENTS.get(d, mat[d]) for d in directions]
+    neighbours = tuple(STUBBORN_AGENTS.get(d, mat[d]) for d in directions)
     return neighbours
 
 
@@ -168,14 +159,14 @@ def get_matrix_energy(mat: np.ndarray, p: int) -> int:
 
 def get_matrix_energies(
     mat: np.ndarray, p: int, energies: dict[str, int]
-) -> List[int, int, int]:
+) -> Tuple[int, int, int]:
     # Returns p energy, 2 energy, inf energy
     # It also appends the energies to the energies dict for convenience
-    results = [
+    results = (
         get_matrix_energy(mat, p),
         get_matrix_energy(mat, 2),
         get_matrix_energy(mat, np.inf),
-    ]
+    )
     energies["p"].append(results[0])
     energies["2"].append(results[1])
     energies["inf"].append(results[2])
@@ -183,7 +174,9 @@ def get_matrix_energies(
 
 
 def degroot_simulation(matrix: np.ndarray, p: int = P):
-    logger.info(f"Starting simulation for p={p}")
+    logger.info(
+        f"Starting simulation for p={p}, stubborn {len(STUBBORN_AGENTS) > 0}, small world {len(SMALL_WORLD_NEIGHBOURS) > 0}"
+    )
     fig, axes = plt.subplots(nrows=1, ncols=len(TIMES_FOR_PLOT) + 1, figsize=(25, 3))
     for ax in axes:
         ax.set_axis_off()
@@ -268,7 +261,7 @@ def degroot_simulation(matrix: np.ndarray, p: int = P):
                 cbar=False,
             )
 
-        energy_p, energy_2, energy_inf = get_matrix_energies(matrix, p, energies)
+        energy_p, energy_2, energy_inf = get_matrix_energies(temp_matrix, p, energies)
         logger.debug(
             f"{i+1} Energies: f{energy_p:.2f}, f{energy_2:.2f}, f{energy_inf:.2f}"
         )
@@ -276,13 +269,13 @@ def degroot_simulation(matrix: np.ndarray, p: int = P):
     if ANIMATION:
         animation = camera.animate()
         animation.save(
-            f"animations/pdegroot_torus_N{N}_p{p}_I{ITERATIONS}_STUBBORN{len(STUBBORN_AGENTS)}".replace(
+            f"animations/pdegroot_torus_N{N}_p{p}_I{ITERATIONS}_STUBBORN{len(STUBBORN_AGENTS)}_SMALL_WORLD_{len(SMALL_WORLD_NEIGHBOURS) > 0}".replace(
                 ".", "_"
             )
             + ".mp4"
         )
     plt.savefig(
-        f"images/pdegroot_torus_N{N}_p{p}_I{ITERATIONS}_STUBBORN{len(STUBBORN_AGENTS)}".replace(
+        f"images/pdegroot_torus_N{N}_p{p}_I{ITERATIONS}_STUBBORN{len(STUBBORN_AGENTS)}_SMALL_WORLD_{len(SMALL_WORLD_NEIGHBOURS) > 0}".replace(
             ".", "_"
         )
         + ".png",
@@ -291,11 +284,17 @@ def degroot_simulation(matrix: np.ndarray, p: int = P):
     )
     plt.show()
 
-    f = draw_energy(ITERATIONS, energies["p"], p)
-    f = draw_energy(ITERATIONS, energies["2"], "2")
-    f = draw_energy(ITERATIONS, energies["inf"], "inf")
+    draw_energies(energies, p)
+
+
+def draw_energies(energies: dict[str, list], p: int):
+    plt.figure("Total Energy (log) vs Time (log)")
+    plt.title("Total Energy (log) vs Time (log)")
+    draw_energy(ITERATIONS, energies["p"], p, "r")
+    draw_energy(ITERATIONS, energies["2"], "2", "g")
+    draw_energy(ITERATIONS, energies["inf"], "inf", "b")
     plt.savefig(
-        f"images/energy_pdegroot_torus_N{N}_p{p}_I{ITERATIONS}_STUBBORN{len(STUBBORN_AGENTS)}".replace(
+        f"images/energy_pdegroot_torus_N{N}_p_{p}_I{ITERATIONS}_STUBBORN{len(STUBBORN_AGENTS)}_SMALL_WORLD_{len(SMALL_WORLD_NEIGHBOURS) > 0}".replace(
             ".", "_"
         )
         + ".png",
