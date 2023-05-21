@@ -15,7 +15,7 @@ from mpl_toolkits.axes_grid1.axes_divider import make_axes_locatable
 
 # Parameters
 
-P_OPTIONS = [1.5, 2, 5, 10, np.inf]
+P_OPTIONS = [1.1, 1.5, 2, 5, 7, 10, 50, np.inf]
 N = 50
 ITERATIONS = 100
 PROCESSES = 1
@@ -35,7 +35,7 @@ Neighbour = tuple[tuple[int, int], tuple[int, int]]
 SmallWorldNeighbours = list[Neighbour]
 
 
-def _generate_small_world_neighbours(N: int = N, k: int = 10) -> SmallWorldNeighbours:
+def _generate_small_world_neighbours(N: int = N, k: int = 5) -> SmallWorldNeighbours:
     # Get neighbours for small world network - we only allow one out of every k nodes to have a single random friend
     values = list(range(0, N - 1))
 
