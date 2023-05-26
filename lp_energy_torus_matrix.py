@@ -2,6 +2,7 @@ import itertools
 import random
 import multiprocessing as mp
 from typing import List, Tuple
+import json
 
 import numpy as np
 from scipy import optimize
@@ -10,13 +11,13 @@ from matplotlib import pyplot as plt
 import seaborn as sns
 from celluloid import Camera
 from logger import logger
-from utils import draw_energy
+from utils import draw_energy, draw_p_vs_a, dump_p_vs_a
 from mpl_toolkits.axes_grid1.axes_divider import make_axes_locatable
 
 # Parameters
 
-P_OPTIONS = [1.1, 1.5, 2, 5, 7, 10, 50, np.inf]
-N = 50
+P_OPTIONS = [1.1, 1.5, 2, 3, np.inf]
+N = 20
 ITERATIONS = 100
 PROCESSES = 1
 STUBBORN_AGENTS_OPTIONS = [
@@ -30,6 +31,9 @@ STEPS_SNAPSHOT = 2
 CHECK_MINIMAL_ENERGY = False
 ANIMATION = False
 TIMES_FOR_PLOT = [1, 5, 10, 50, 100]
+
+P_VS_A_NOT_STUBBORN = []
+P_VS_A_STUBBORN = []
 
 Neighbour = tuple[tuple[int, int], tuple[int, int]]
 SmallWorldNeighbours = list[Neighbour]
@@ -84,7 +88,7 @@ def _get_neighbours(
     return neighbours
 
 
-def _calculate_next_energy(
+def _calculate_next_opinion(
     mat: np.ndarray,
     idx: Tuple[int, int],
     p: int,
@@ -119,7 +123,7 @@ def degroot_iteration(
     temp = mat.copy()
     if PROCESSES == 1:
         result = starmap(
-            _calculate_next_energy,
+            _calculate_next_opinion,
             [
                 (mat, idx, p, stubborn_agents, small_world_neighbours)
                 for idx, _ in np.ndenumerate(temp)
@@ -128,7 +132,7 @@ def degroot_iteration(
     else:
         with mp.Pool(processes=PROCESSES) as pool:
             result = pool.starmap(
-                _calculate_next_energy,
+                _calculate_next_opinion,
                 [
                     (mat, idx, p, stubborn_agents, small_world_neighbours)
                     for idx, _ in np.ndenumerate(temp)
@@ -189,25 +193,6 @@ def get_matrix_energy(
         return sum(result)
 
 
-def get_matrix_energies(
-    mat: np.ndarray,
-    p: int,
-    energies: dict[str, int],
-    stubborn_agents: dict,
-    small_world_neighbours: SmallWorldNeighbours,
-) -> Tuple[int, int, int]:
-    # Returns p energy, 2 energy, inf energy
-    # It also appends the energies to the energies dict for convenience
-    results = tuple(
-        get_matrix_energy(mat, _p, stubborn_agents, small_world_neighbours)
-        for _p in [p, 2, np.inf]
-    )
-    energies["p"].append(results[0])
-    energies["2"].append(results[1])
-    energies["inf"].append(results[2])
-    return results
-
-
 def degroot_simulation(
     matrix: np.ndarray,
     p: int,
@@ -262,13 +247,10 @@ def degroot_simulation(
         )
         camera.snap()
 
-    energies = {"p": [], "2": [], "inf": []}
-    energy_p, energy_2, energy_inf = get_matrix_energies(
-        matrix, p, energies, stubborn_agents, small_world_neighbours
-    )
-    logger.info(
-        f"Initial Energies: f{energy_p:.2f}, f{energy_2:.2f}, f{energy_inf:.2f}"
-    )
+    energies = []
+    energy = get_matrix_energy(matrix, p, stubborn_agents, small_world_neighbours)
+    energies.append(energy)
+    logger.info(f"Initial {p} Energy: {energy:.2f}")
 
     temp_matrix = matrix.copy()
     for i in range(ITERATIONS):
@@ -305,12 +287,11 @@ def degroot_simulation(
                 cbar=False,
             )
 
-        energy_p, energy_2, energy_inf = get_matrix_energies(
-            temp_matrix, p, energies, stubborn_agents, small_world_neighbours
+        energy = get_matrix_energy(
+            temp_matrix, p, stubborn_agents, small_world_neighbours
         )
-        logger.debug(
-            f"{i+1} Energies: f{energy_p:.2f}, f{energy_2:.2f}, f{energy_inf:.2f}"
-        )
+        energies.append(energy)
+        logger.debug(f"{i+1} Energy: {energy:.2f}")
 
     if ANIMATION:
         animation = camera.animate()
@@ -334,16 +315,19 @@ def degroot_simulation(
 
 
 def draw_energies(
-    energies: dict[str, list],
+    energies: list,
     p: int,
     stubborn_agents: dict,
     small_world_neighbours: SmallWorldNeighbours,
 ):
-    plt.figure("Total Energy (log) vs Time (log)")
-    plt.title("Total Energy (log) vs Time (log)")
-    draw_energy(ITERATIONS, energies["p"], p, "r")
-    draw_energy(ITERATIONS, energies["2"], "2", "g")
-    draw_energy(ITERATIONS, energies["inf"], "inf", "b")
+    plt.figure("Total Energy vs Time (log log plot)")
+    plt.title("Total Energy vs Time (log log plot)")
+    a = draw_energy(energies, p, "b", stubborn=len(stubborn_agents) > 0)
+    if len(small_world_neighbours) == 0:
+        if len(stubborn_agents) > 0:
+            P_VS_A_STUBBORN.append((p, a))
+        else:
+            P_VS_A_NOT_STUBBORN.append((p, a))
     plt.savefig(
         f"images/energy_pdegroot_torus_N{N}_p_{p}_I{ITERATIONS}_STUBBORN{len(stubborn_agents)}_SMALL_WORLD_{len(small_world_neighbours) > 0}".replace(
             ".", "_"
@@ -405,6 +389,8 @@ def main():
         if CHECK_MINIMAL_ENERGY:
             check_minimal_energy(stubborn_agents)
         degroot_simulation(matrix, p, stubborn_agents, small_world_neighbours)
+    dump_p_vs_a(P_VS_A_NOT_STUBBORN, P_VS_A_STUBBORN)
+    draw_p_vs_a()
 
 
 if __name__ == "__main__":
