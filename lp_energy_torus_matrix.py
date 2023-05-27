@@ -1,8 +1,7 @@
 import itertools
 import random
 import multiprocessing as mp
-from typing import List, Tuple
-import json
+from typing import Tuple
 
 import numpy as np
 from scipy import optimize
@@ -10,14 +9,17 @@ from itertools import starmap
 from matplotlib import pyplot as plt
 import seaborn as sns
 from celluloid import Camera
-from logger import logger
-from utils import draw_energy, draw_p_vs_a, dump_p_vs_a
 from mpl_toolkits.axes_grid1.axes_divider import make_axes_locatable
+import pandas as pd
+
+from logger import logger
+from utils import draw_energy, draw_p_vs_a, dump_p_vs_a, fit_energy_to_time
+
 
 # Parameters
 
 P_OPTIONS = [1.1, 1.5, 2, 3, np.inf]
-N = 20
+N = 30
 ITERATIONS = 100
 PROCESSES = 1
 STUBBORN_AGENTS_OPTIONS = [
@@ -31,9 +33,6 @@ STEPS_SNAPSHOT = 2
 CHECK_MINIMAL_ENERGY = False
 ANIMATION = False
 TIMES_FOR_PLOT = [1, 5, 10, 50, 100]
-
-P_VS_A_NOT_STUBBORN = []
-P_VS_A_STUBBORN = []
 
 Neighbour = tuple[tuple[int, int], tuple[int, int]]
 SmallWorldNeighbours = list[Neighbour]
@@ -54,7 +53,7 @@ def _generate_small_world_neighbours(N: int = N, k: int = 5) -> SmallWorldNeighb
     return neighbours
 
 
-SMALL_WORLD_NEIGHBOURS_OPTIONS = [[], _generate_small_world_neighbours()]
+SMALL_WORLD_NEIGHBOURS_OPTIONS = [[]]  # , _generate_small_world_neighbours()]
 
 # Functions
 
@@ -311,23 +310,9 @@ def degroot_simulation(
     )
     plt.show()
 
-    draw_energies(energies, p, stubborn_agents, small_world_neighbours)
+    values = fit_energy_to_time(energies, p, N, stubborn_agents)
+    draw_energy(energies, values["y"], values["label"])
 
-
-def draw_energies(
-    energies: list,
-    p: int,
-    stubborn_agents: dict,
-    small_world_neighbours: SmallWorldNeighbours,
-):
-    plt.figure("Total Energy vs Time (log log plot)")
-    plt.title("Total Energy vs Time (log log plot)")
-    a = draw_energy(energies, p, "b", stubborn=len(stubborn_agents) > 0)
-    if len(small_world_neighbours) == 0:
-        if len(stubborn_agents) > 0:
-            P_VS_A_STUBBORN.append((p, a))
-        else:
-            P_VS_A_NOT_STUBBORN.append((p, a))
     plt.savefig(
         f"images/energy_pdegroot_torus_N{N}_p_{p}_I{ITERATIONS}_STUBBORN{len(stubborn_agents)}_SMALL_WORLD_{len(small_world_neighbours) > 0}".replace(
             ".", "_"
@@ -337,6 +322,11 @@ def draw_energies(
         pad_inches=0,
     )
     plt.show()
+
+    return {
+        "energies": energies,
+        "a": values["a"],
+    }
 
 
 def energy_function_flat(
@@ -383,14 +373,25 @@ def main():
     matrix = 10 * np.random.rand(N, N)
     logger.info("Generated matrix")
 
+    p_vs_a_stubborn_data = []
+    p_vs_a_not_stubborn_data = []
+
     for p, small_world_neighbours, stubborn_agents in itertools.product(
         P_OPTIONS, SMALL_WORLD_NEIGHBOURS_OPTIONS, STUBBORN_AGENTS_OPTIONS
     ):
         if CHECK_MINIMAL_ENERGY:
             check_minimal_energy(stubborn_agents)
-        degroot_simulation(matrix, p, stubborn_agents, small_world_neighbours)
-    dump_p_vs_a(P_VS_A_NOT_STUBBORN, P_VS_A_STUBBORN)
-    draw_p_vs_a()
+        values = degroot_simulation(matrix, p, stubborn_agents, small_world_neighbours)
+        if len(small_world_neighbours) == 0:
+            if len(stubborn_agents) > 0:
+                p_vs_a_stubborn_data.append((p, values["a"]))
+            else:
+                p_vs_a_not_stubborn_data.append((p, values["a"]))
+
+    p_vs_a_not_stubborn = pd.DataFrame(p_vs_a_not_stubborn_data, columns=["p", "a"])
+    p_vs_a_stubborn = pd.DataFrame(p_vs_a_stubborn_data, columns=["p", "a"])
+    dump_p_vs_a(p_vs_a_not_stubborn, p_vs_a_stubborn)
+    draw_p_vs_a(p_vs_a_not_stubborn, p_vs_a_stubborn)
 
 
 if __name__ == "__main__":
