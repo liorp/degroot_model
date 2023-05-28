@@ -18,7 +18,7 @@ from utils import draw_energy, draw_p_vs_a, dump_p_vs_a, fit_energy_to_time
 
 # Parameters
 
-P_OPTIONS = [1.1, 1.5, 2, 3, np.inf]
+P_OPTIONS = [1.1, 1.5, 2, 3, 5, 50, np.inf]
 N = 30
 ITERATIONS = 100
 PROCESSES = 1
