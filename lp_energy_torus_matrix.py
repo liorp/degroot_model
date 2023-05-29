@@ -18,7 +18,7 @@ from utils import draw_energy, draw_p_vs_a, dump_p_vs_a, fit_energy_to_time
 
 # Parameters
 
-P_OPTIONS = [1.1, 1.5, 2, 3, 5, 50, np.inf]
+P_OPTIONS = [1.1, 1.5, 2, 3, 5, np.inf]
 N = 30
 ITERATIONS = 100
 PROCESSES = 1
@@ -98,8 +98,10 @@ def _calculate_next_opinion(
         return idx, stubborn_agents[idx]
     neighbours = _get_neighbours(mat, idx, stubborn_agents, small_world_neighbours)
 
-    if p == np.inf:
-        energy_function = lambda x: np.max(np.abs(np.subtract(x, neighbours)))
+    if p == 2:
+        return idx, sum(neighbours) / len(neighbours)
+    elif p == np.inf:
+        return idx, (np.max(neighbours) + np.min(neighbours)) / 2
     else:
         energy_function = lambda x: np.sum(
             np.float_power(np.abs(np.subtract(x, neighbours)), p)
@@ -310,7 +312,7 @@ def degroot_simulation(
     )
     plt.show()
 
-    values = fit_energy_to_time(energies, p, N, stubborn_agents)
+    values = fit_energy_to_time(energies, p, stubborn_agents)
     draw_energy(energies, values["y"], values["label"])
 
     plt.savefig(

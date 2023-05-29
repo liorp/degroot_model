@@ -1,28 +1,26 @@
 from matplotlib import pyplot as plt
 import numpy as np
-import json
 import pandas as pd
 
 
-THRESHOLDS = (0.01, 1e6)
+THRESHOLDS = (0.001, 1e6)
 
 
 def draw_energy(
     energies: list[float],
     fitted_energies: list[float],
     label: str,
-    color: str = "r",
 ) -> int:
     plt.figure("Total Energy vs Time (log log plot)")
     plt.title("Total Energy vs Time (log log plot)")
-    plt.scatter(np.arange(len(energies)), energies, c=color, label="Data")
 
     plt.loglog(
         np.arange(len(fitted_energies)),
         fitted_energies,
-        f"{color}--",
+        "b--",
         label=label,
     )
+    plt.scatter(np.arange(len(energies)), energies, c="r", label="Data")
     plt.legend(fontsize=9)
     plt.xlabel("Time")
     plt.ylabel("Energy")
@@ -31,7 +29,6 @@ def draw_energy(
 def fit_energy_to_time(
     energies: list[int],
     p: float,
-    N: int,
     stubborn: bool = False,
 ) -> dict:
     t, e = remove_extreme_values(
@@ -39,22 +36,29 @@ def fit_energy_to_time(
     )
     log_times = np.log(t)
     log_energies = np.log(e)
+    x = np.log(np.arange(1, len(energies)))
 
     if not stubborn:
         # Linear regression E(t)=e^b*t^a => log(E(t))=a*log(t)+b
         a, b = np.polyfit(log_times, log_energies, 1)
-        x, y = np.exp(log_times), np.exp(a * log_times + b)
+        y = np.exp(a * x + b)
         label = f"l_{p} E(t)=e^{b:.2f}*t^{a:.2f}"
     else:
         # Regression E(t)=E_infty+e^b*t^a => log(E(t)-E_infty)=a*log(t)+b
         # We assume that E_infty is the last value of the energy
-        E_infty = e[-1] - 0.01
-        # We only fit the part of the data between round(N / 2) : round(len(e) / 2)
+        E_infty = e[-1]
+
+        # We only fit the part of the data
         # because the energy is not stable at the beginning and at the end
-        r = slice(int(N / 3), int(len(t) / 1.5))
+        r = slice(int(len(t) / 10), int(len(t) / 1.25))
+
         a, b = np.polyfit(log_times[r], np.log(e[r] - E_infty), 1)
-        x, y = t, E_infty + np.exp(a * log_times + b)
+        y = E_infty + np.exp(a * x + b)
         label = f"l_{p} E(t)={E_infty:.2f}+e^{b:.2f}*t^{a:.2f}"
+    # Add first energy value
+    # x, y = np.concatenate((np.array([0]), np.array(x))), np.concatenate(
+    #     (np.array([energies[0]]), np.array(y))
+    # )
     return {
         "a": a,
         "b": b,
