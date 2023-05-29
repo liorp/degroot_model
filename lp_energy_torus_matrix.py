@@ -200,14 +200,12 @@ def degroot_simulation(
     stubborn_agents: dict,
     small_world_neighbours: SmallWorldNeighbours,
 ) -> dict:
-    logger.info(
-        f"Starting simulation for p={p}, stubborn {len(stubborn_agents)}, small world {len(small_world_neighbours) > 0}"
-    )
+    logger.info(f"Starting simulation for p={p}, stubborn {len(stubborn_agents)}")
     fig, axes = plt.subplots(nrows=1, ncols=len(TIMES_FOR_PLOT) + 1, figsize=(25, 3))
     for ax in axes:
         ax.set_axis_off()
     fig.suptitle(
-        f"Simulating p-DeGroot for n={N} p={p} stubborn={stubborn_agents} small world {len(small_world_neighbours) > 0} in times {TIMES_FOR_PLOT}"
+        f"Simulating p-DeGroot for n={N} p={p} stubborn={stubborn_agents} in times {TIMES_FOR_PLOT}"
     )
     im1 = sns.heatmap(
         matrix,
