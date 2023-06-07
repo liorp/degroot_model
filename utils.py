@@ -1,6 +1,7 @@
 from matplotlib import pyplot as plt
 import numpy as np
 import pandas as pd
+from scipy.optimize import curve_fit
 
 
 THRESHOLDS = (0.001, 1e6)
@@ -15,12 +16,12 @@ def draw_energy(
     plt.title("Total Energy vs Time (log log plot)")
 
     plt.loglog(
-        np.arange(len(fitted_energies)),
+        np.arange(1, len(fitted_energies) + 1),
         fitted_energies,
         "b--",
         label=label,
     )
-    plt.scatter(np.arange(len(energies)), energies, c="r", label="Data")
+    plt.scatter(np.arange(1, len(energies) + 1), energies, c="r", label="Data")
     plt.legend(fontsize=9)
     plt.xlabel("Time")
     plt.ylabel("Energy")
@@ -36,24 +37,29 @@ def fit_energy_to_time(
     )
     log_times = np.log(t)
     log_energies = np.log(e)
-    x = np.log(np.arange(1, len(energies)))
+    x = np.arange(1, len(energies))
 
     if not stubborn:
         # Linear regression E(t)=e^b*t^a => log(E(t))=a*log(t)+b
         a, b = np.polyfit(log_times, log_energies, 1)
-        y = np.exp(a * x + b)
+        y = np.exp(b) * np.float_power(x, a)
         label = f"l_{p} E(t)=e^{b:.2f}*t^{a:.2f}"
     else:
         # Regression E(t)=E_infty+e^b*t^a => log(E(t)-E_infty)=a*log(t)+b
+        # In order to obtain initial guess for the parameters, we fit the data with polyfit
         # We assume that E_infty is the last value of the energy
         E_infty = e[-1]
 
         # We only fit the part of the data
         # because the energy is not stable at the beginning and at the end
-        r = slice(int(len(t) / 10), int(len(t) / 1.25))
-
+        r = slice(int(len(t) / 50), int(len(t) / 1.25))
         a, b = np.polyfit(log_times[r], np.log(e[r] - E_infty), 1)
-        y = E_infty + np.exp(a * x + b)
+
+        # We use the initial guess to fit the data using nonlinear least squares with `curve_fit`
+        popt, pcov = curve_fit(stubborn_energy, x, e, [a, b, E_infty])
+        a, b, E_infty = popt
+
+        y = E_infty + np.exp(b) * np.float_power(x, a)
         label = f"l_{p} E(t)={E_infty:.2f}+e^{b:.2f}*t^{a:.2f}"
     # Add first energy value
     # x, y = np.concatenate((np.array([0]), np.array(x))), np.concatenate(
@@ -66,6 +72,10 @@ def fit_energy_to_time(
         "y": y,
         "label": label,
     }
+
+
+def stubborn_energy(x, a, b, E_infty):
+    return E_infty + np.exp(b) * np.float_power(x, a)
 
 
 def remove_extreme_values(x, y, thresholds=THRESHOLDS):
